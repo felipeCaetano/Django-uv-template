@@ -1,0 +1,60 @@
+name: Django CI com uv
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:14
+        env:
+          POSTGRES_DB: mydb
+          POSTGRES_USER: myuser
+          POSTGRES_PASSWORD: mypassword
+        ports: [ '5432:5432' ]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://myuser:mypassword@localhost:5432/mydb
+      DJANGO_SECRET_KEY: dummysecretkey
+      DEBUG: 1
+
+    steps:
+      - name: Checkout o código
+        uses: actions/checkout@v3
+
+      - name: Instalar o uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Instalar dependências com uv
+        run: |
+          uv venv
+          source .venv/bin/activate
+          uv pip install -e .[dev]
+
+      - name: Rodar migrations
+        run: |
+          source .venv/bin/activate
+          python manage.py migrate
+
+      - name: Rodar testes
+        run: |
+          source .venv/bin/activate
+          pytest
+
+      - name: Verificar formatação com Black
+        run: |
+          source .venv/bin/activate
+          black . --check
